@@ -1,0 +1,1531 @@
+---
+title: "DA5030.Final.Project"
+author: "Teena.Dodeja"
+date: '2022-08-17'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+## **CRISP-DM: Business Understanding**
+
+Craiglist is the largest collection of the housing options in USA and includes the description of the features and amenities for different housing types. The present data includes the different types of housings along with the features like region, state, location in the form of lattitude and logitude, if the cats and dogs are allowed, for the different housing types and the price.
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+## **CRISP-DM: Description of the problem**
+
+The purpose of this project is to analyze the given data in kaggle scraped from Craiglist for year 2020, and evaluate the predictor variables to build a regression model to predict the price of the housings.
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+```{r}
+## loading the required libraries
+library(tidyverse)
+library(scales)
+library(GGally)
+library(reshape2)
+library(skimr)
+library(corrr)
+library(caret)
+library(rsample)
+library(fastDummies)
+library(Metrics)
+library(glmnet)
+library(vip)
+library(rpart)
+library(corrplot)
+library(psych)
+library(rpart.plot)
+library(neuralnet)
+library(caretEnsemble)
+library(ranger)
+
+
+```
+
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+## CRISP-DM: Data Understanding
+
+Loading the USA House listing Data from Kaggle
+URL: Zip file(problem in loading)
+URL: https://www.kaggle.com/datasets/austinreese/usa-housing-listings/download?datasetVersionNumber=3
+
+
+
+```{r}
+## loading the data as CSV
+usa_housing_df <- read.csv("housing.csv", stringsAsFactors = F, 
+                           na.strings = c("NA", "", " ", "n/a", "N/A"))
+
+
+
+
+## overview with the head and glimpse function
+## to get the sense of class of the variables and number of observations
+
+head(usa_housing_df, 2)
+
+
+glimpse(usa_housing_df)
+
+## the data regarding the USA housing options for year 2020 has
+## 384977 observations and 22 variables
+## with both categorical and continuous variables
+
+## it shows the variables like ID, url of the craiglist houses listings
+## region information, region url
+
+## variables regarding the house rent price:
+## price, type of the house, sqfeet, beds, bath, 
+## cats allowed, dogs allowed, smoking allowed,
+## wheelchair access, laundry oprions, parking options,
+
+## it also, includes image url, description regarding the 
+## house and amenities
+
+## location information lattitude , longitude and state
+
+```
+
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+### Distribution 
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+
+```{r}
+
+## evaluation of the data with summary and skim 
+
+summary(usa_housing_df)
+
+skim(usa_housing_df)
+
+## the summary of the continuous variables
+## i.e. price, sqfeet, beds, baths, lat and long
+## shows difference in the mean and median and large
+## difference in the third quartile and max and presence of 0 values
+## which indicates the presence of outliers and unreasonable entries
+## it also shows presence of missing values in the data
+
+## removing the variables which does not provide any information
+## for evaluation i.e. ID, url, region_url
+## image_url and description, state, region
+## as lattitude and longitude per se does not 
+## provide specific information for location(information can be derived
+## from these by getting the distance or grouping them into clusters and getting ## the id of the locations to use it in the data)
+
+
+
+usa_housing_df <- usa_housing_df %>% select(-id, -url, -region_url, 
+                                            -image_url, -description, -state,
+                                            -region, -lat, -long)
+
+
+
+
+
+## summary of the continuous variables
+
+summary(usa_housing_df[, c(1,3)])
+
+## large diferrence in mean and median indicates that the data is skewed
+
+
+
+## distribution of the categorical variables
+
+table(usa_housing_df$type, useNA = "ifany")
+
+## type shows the type and number of the property like apartment, house, etc
+
+
+table(usa_housing_df$beds, useNA = "ifany")
+
+table(usa_housing_df$baths, useNA = "ifany")
+
+table(usa_housing_df$cats_allowed, useNA = "ifany")
+
+table(usa_housing_df$dogs_allowed, useNA = "ifany")
+
+table(usa_housing_df$smoking_allowed, useNA = "ifany")
+
+table(usa_housing_df$wheelchair_access, useNA = "ifany")
+
+table(usa_housing_df$electric_vehicle_charge, useNA = "ifany")
+
+table(usa_housing_df$comes_furnished, useNA = "ifany")
+
+table(usa_housing_df$laundry_options, useNA = "ifany")
+
+## laundry options include laundry in building, on site or not and presence of ## NA's
+
+table(usa_housing_df$parking_options, useNA = "ifany")
+
+## parking options include the type of parkings and presence of NA's
+
+
+#```````````````````````````````````````````````````````````````````````````````
+## further univariate analysis with visualization
+#```````````````````````````````````````````````````````````````````````````````
+
+
+## Distribution of the Continuous variables
+
+ggplot(usa_housing_df, aes(price)) + 
+  geom_histogram(color = "black", fill="light blue") +
+  labs(title = "Distribution of the rent price in the USA Housing Data",
+       x="price", y="count", caption = "USA Housing Data: Kaggle") +
+  theme_bw()
+
+## the wide x axis indicates the presence outliers
+## the data is heavily right skewed
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+ggplot(usa_housing_df, aes(sqfeet)) + 
+  geom_histogram(color = "black", fill="light blue") +
+  labs(title = "Distribution of the sqfeet in the USA Housing Data",
+       x="Sq.feet", y="count", caption = "USA Housing Data: Kaggle") +
+  theme_bw()
+
+
+## it also shows the heavily right skewed data
+
+
+ggplot(usa_housing_df, aes(factor(beds), fill=factor(beds))) + 
+  geom_bar() + 
+  labs(x="beds", y= "Count", title="Distribution of the number of beds",
+       caption = "USA Housing Data: kaggle") +
+  theme_bw()
+
+
+
+ggplot(usa_housing_df, aes(factor(baths), fill=factor(baths))) + 
+  geom_bar() + 
+  labs(x="baths", y= "Count", title="Distribution of the number of baths",
+       caption = "USA Housing Data: kaggle") +
+  theme_bw()
+
+
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Distribution of the categorical variable
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+ggplot(usa_housing_df, aes(type, color=type, fill=type)) + 
+  geom_bar() + 
+  labs(x="type", y= "Count", title="Distribution of Types of property",
+       caption = "USA Housing Data: kaggle") +
+  theme_bw() +
+  scale_x_discrete(guide=guide_axis(n.dodge=2))
+
+
+## maximum number of the property are apartments
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+ggplot(usa_housing_df, aes(factor(cats_allowed), fill=factor(cats_allowed))) + 
+  geom_bar() + 
+  labs(x="cats allowed", y= "Count", title="Distribution of the feature cats allowed",
+       caption = "USA Housing Data: kaggle") +
+  theme_bw()
+
+## in maximum number of the properties cats were allowed
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+ggplot(usa_housing_df, aes(factor(dogs_allowed), fill=factor(dogs_allowed))) + 
+  geom_bar() + 
+  labs(x="dogs allowed", y= "Count", title="Distribution of the feature dogs allowed",
+       caption = "USA Housing Data: kaggle") +
+  theme_bw()
+
+## dogs were allowed in maximum number of cases
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+ggplot(usa_housing_df, aes(factor(smoking_allowed), fill=factor(smoking_allowed))) + 
+  geom_bar() + 
+  labs(x="smoking allowed", y= "Count", title="Distribution of the feature smoking allowed",
+       caption = "USA Housing Data: kaggle") +
+  theme_bw()
+
+## smoking was allowed in maximum number of cases
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+ggplot(usa_housing_df, aes(factor(wheelchair_access), fill=factor(wheelchair_access))) + 
+  geom_bar() + 
+  labs(x="wheelchair access", y= "Count", title="Distribution of the feature wheelchair_access",
+       caption = "USA Housing Data: kaggle") +
+  theme_bw()
+
+## there was no wheelchair access in most of the housings
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+ggplot(usa_housing_df, aes(factor(electric_vehicle_charge), fill=factor(electric_vehicle_charge))) + 
+  geom_bar() + 
+  labs(x="electric_vehicle_charge", y= "Count", title="Distribution of the feature electric_vehicle_charge",
+       caption = "USA Housing Data: kaggle") +
+  theme_bw()
+
+
+## very less number of housings have the electric vehicle charge 
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+ggplot(usa_housing_df, aes(factor(comes_furnished ), fill=factor(comes_furnished ))) + 
+  geom_bar() + 
+  labs(x="comes_furnished ", y= "Count", title="Distribution of the feature comes_furnished ",
+       caption = "USA Housing Data: kaggle") +
+  theme_bw()
+
+
+## the housing is not furnishes in most of the cases
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+usa_housing_df %>%
+  count(laundry_options=laundry_options) %>%
+  mutate(laundry_per = prop.table(n)) %>%
+  ggplot(aes(laundry_options, laundry_per, fill=laundry_options, label=scales::percent(laundry_per))) +
+  geom_col() + 
+  scale_y_continuous(labels = scales::percent) +
+  geom_text(vjust=-0.5) +
+  labs(x="Laundy Options", y= "Percent", title="Distribution of the feature laundry options",
+       caption = "USA Housing Data: kaggle") +
+  theme_bw() +
+  scale_x_discrete(guide=guide_axis(n.dodge=2))
+
+## maximum number of housings have laundry options within the unit
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+usa_housing_df %>%
+  count(parking_options=parking_options) %>%
+  mutate(parking_per = prop.table(n)) %>%
+  ggplot(aes(parking_options, parking_per, color=parking_options,fill=parking_options, label=scales::percent(parking_per))) +
+  geom_col() + 
+  scale_fill_brewer(palette = "Set2", na.value="grey") +
+  scale_color_brewer(palette = "Set2") +
+  scale_y_continuous(labels = scales::percent) +
+  geom_text(vjust=-0.5, color="black") +
+  labs(x="Parking Options", y= "Percent", title="Distribution of the feature parking options",
+       caption = "USA Housing Data: kaggle") +
+  theme_bw() +
+  scale_x_discrete(guide=guide_axis(n.dodge=2))
+
+
+## maximum number of housings have off-street parking
+
+
+```
+
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Splitting the data into train and test set with stratiified sampling method
+
+Further preprocessing and manipulation will be done on the train data 
+and test set will be completely isolated and untouched
+
+The train set would be further split into train and validation set
+
+Train set will be used for model building
+validation set will be used for tuning the model
+
+Test set will be used infinal model deploment phase as per Crisp-DM 
+and to report performance of the final model
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+                                                                                                                                                              
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+### Checking duplicates, before splitting into train and test
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+```{r}
+check_duplicate <- duplicated(usa_housing_df)
+
+sum(check_duplicate, na.rm = T)
+
+## this shows the presence of 213716 duplicate values
+## removing the duplicate entries
+
+usa_housing_df <- distinct(usa_housing_df)
+
+# checking the if the data has unique values after removing deplicates
+sum(duplicated(usa_housing_df))
+
+
+#~```````````````````````````````````````````````````````````````````````````````
+# Splitting the data into train, test with stratified sampling method
+# using initial_split function from rsample package
+# the split ratio is 80:20
+
+## after preprocessing the train data, it will further split
+## into train and validation
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+## setting the seed for reproducibility of the results
+set.seed(123)
+
+
+## using initial split function from rsample package 
+sample_index <- initial_split(usa_housing_df, prop=0.8, strata="price")
+
+## creating training data
+usa_housing_train <- training(sample_index)
+
+
+## checking the number of observations in train set
+nrow(usa_housing_train)
+
+## it forms 80% of the data
+
+## creating testing data
+usa_housing_test <- testing(sample_index)
+
+nrow(usa_housing_test)
+
+```
+
+
+##~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+## using the train data for further data manipulation and processing
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+## **CRISP-DM: DATA Preparation**
+
+### Pipeline
+### Missing value detection and handling
+### outlier detection and handling
+### checking and handling unreasonale values
+### encoding categorical varaibles
+### normalizing( done after splitting the train into train and validation set)
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+### Missing Values
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+```{r}
+colSums(is.na(usa_housing_train))
+
+usa_housing_na <- data.frame(variables=names(usa_housing_train), missing=colSums(is.na(usa_housing_train)))
+
+ggplot(usa_housing_na, aes(variables, missing, fill=variables)) + geom_col() +
+  scale_x_discrete(guide = guide_axis(n.dodge=2)) +
+  labs(title = "Missing Values in USA Housing Dataset",
+       caption = "USA Housing Data: Kaggle") +
+  theme_bw()
+
+
+
+#```````````````````````````````````````````````````````````````````````````````
+# Handling missing values
+#```````````````````````````````````````````````````````````````````````````````
+
+colSums(is.na(usa_housing_train))
+
+## the variables parking options, laundry options have missing 
+## values
+
+
+## checking in how many observations these variables have missing
+## values altogether
+
+usa_housing_df_missing <- usa_housing_train %>%
+  filter(is.na(laundry_options) & is.na(parking_options)) %>%
+  count()
+
+
+usa_housing_df_missing
+
+
+## as 23364 observations have missing value in these variables
+## it forms 17 % of the data, as removing 17% of the data will affect the data size
+## thus considering missing values as separate category 
+
+
+
+## including a separate category called unknown for NA's in laundry and 
+## parking options
+
+usa_housing_train$laundry_options[is.na(usa_housing_train$laundry_options)] <- "unknown"
+
+
+usa_housing_train$parking_options[is.na(usa_housing_train$parking_options)] <- "unknown"
+
+
+## checking if all na's removed
+colSums(is.na(usa_housing_train))
+
+
+## the data is clean with no missing values
+
+
+
+```
+
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+### Outliers and unreasonable values
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+```{r}
+## outliers in the continuous variables with boxplot
+
+##  visualizing the outliers with box plot
+## using melt function from the reshape2 package.
+
+
+df.cols <- names(usa_housing_train[,c(1,3:5)])
+
+
+data.boxplot <- melt(usa_housing_train[,c(1,3:5)], measure.vars = df.cols)
+
+
+ggplot(data.boxplot) + 
+  geom_boxplot(aes(x=variable, y=value, color=variable)) + 
+  scale_x_discrete(guide = guide_axis(n.dodge = 2)) +
+  labs(title="Boxplot to show the outliers in continuous variables",
+       caption = "Outliers in the continuous variables") +
+  scale_y_log10()
+
+
+## this shows the presence of outliers in almost all the numeric variables
+## this can be further analysed with identifing the outliers with 3SD
+## from mean based on Z score.
+
+
+## to get Z score of the values in the continuous variable using scale function
+usa_housing_z <- as.data.frame(abs(scale(usa_housing_train[,c(1,3:5)])))
+
+
+# function to get the number of outliers for each continuous variable in 
+# the data.
+
+outlier_3sd <- function(x) {
+  outliers <- c()
+  percent_dis <- c()
+  for (i in 1:length(x)) {
+    outliers[i] <- length(which(x[i] > 3)) 
+    percent_dis[i] <- round((outliers[i]/nrow(x)) * 100, 5)
+  }
+  
+  variables <- names(x)
+  
+  return(outlier_data <- data.frame(variables, outliers, percent_dis))
+  
+  
+}
+
+usa_housing_outliers <- outlier_3sd(usa_housing_z)
+
+usa_housing_outliers
+
+
+
+## this shows the number of outliers in the all continuous variables.
+## and the percent distribution of outliers in each variable
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+## removing outliers in continuous variables (observations with 3SD from the mean)
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+usa_housing_outlier <- usa_housing_train[,c(1,3:5)]
+
+usa_housing_outlier <- as.data.frame(lapply(usa_housing_outlier, function(usa_housing_outlier)
+  abs((mean(usa_housing_outlier, na.rm=T)- usa_housing_outlier)/sd(usa_housing_outlier, na.rm=T))))
+
+
+## checking what percent of the data consist of outliers
+
+outliers_percent <- (nrow(usa_housing_train[rowSums(usa_housing_outlier>3), ])/nrow(usa_housing_df))*100
+
+outliers_percent
+
+## 0.7% of the complete consist of outliers with 3SD from the mean based on z score
+## thus removing the outliers
+
+
+usa_housing_train <- usa_housing_train[!rowSums(usa_housing_outlier>3),]
+
+
+df.cols <- names(usa_housing_train[,c(1,3:5)])
+
+
+data.boxplot <- melt(usa_housing_train[,c(1,3:5)], measure.vars = df.cols)
+
+
+ggplot(data.boxplot) + 
+  geom_boxplot(aes(x=variable, y=value, color=variable)) + 
+  scale_x_discrete(guide = guide_axis(n.dodge = 2)) +
+  labs(title="Boxplot to show the outliers in continuous variables",
+       caption = "Outliers in the continuous variables") +
+  scale_y_log10()
+
+
+summary(usa_housing_train)
+
+
+
+
+## checking unreasonable values including 0 in the data
+colSums(usa_housing_train[,c(1,3)]==0)
+
+
+## this shows that there 383 observations with zero price which seems
+## unreasonable
+
+## 23 observation with 0 value in sqfeet which also seems incorrect
+
+## checking number of observations with less than 200 price
+
+check_price_apartment <- usa_housing_train %>%
+  select(price, type, dogs_allowed, sqfeet) %>%
+  filter(price <200) %>% count()
+
+check_price_apartment
+
+
+check_lsqfeet_apartment <- usa_housing_train %>%
+  select(price, type, dogs_allowed, sqfeet) %>%
+  filter(sqfeet <100) %>% count()
+
+check_lsqfeet_apartment
+
+
+check_hsqfeet_apartment <- usa_housing_train %>%
+  select(price, type, dogs_allowed, sqfeet) %>%
+  filter(sqfeet >8000) %>% count()
+
+check_hsqfeet_apartment
+
+## this seems unreasonable thus can be considered wrong entries
+## as the value cannot be zero or not less than 200 commonly
+## thus imputing these values with median
+
+usa_housing_train$price[usa_housing_train$price < 200] <- median(usa_housing_train$price, na.rm = T)
+
+usa_housing_train$sqfeet[usa_housing_train$sqfeet < 100] <- median(usa_housing_train$sqfeet, na.rm = T)
+
+usa_housing_train$sqfeet[usa_housing_train$sqfeet > 8000] <- median(usa_housing_train$sqfeet, na.rm = T)
+
+## checking summary after cleaning the data
+summary(usa_housing_train)
+
+## distribution of categorical variables with tables
+table(usa_housing_train$baths)
+
+table(usa_housing_train$type, useNA = "ifany")
+
+table(usa_housing_train$beds, useNA = "ifany")
+
+table(usa_housing_train$baths, useNA = "ifany")
+
+table(usa_housing_train$cats_allowed, useNA = "ifany")
+
+table(usa_housing_train$dogs_allowed, useNA = "ifany")
+
+table(usa_housing_train$smoking_allowed, useNA = "ifany")
+
+table(usa_housing_train$wheelchair_access, useNA = "ifany")
+
+table(usa_housing_train$electric_vehicle_charge, useNA = "ifany")
+
+table(usa_housing_train$comes_furnished, useNA = "ifany")
+
+table(usa_housing_train$laundry_options, useNA = "ifany")
+
+table(usa_housing_train$parking_options, useNA = "ifany")
+
+
+```
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+## Distribution of the continuous variables after removing the outliers 
+## with histogram
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+```{r}
+## distribution of the continuous variables after removing the outliers
+## with histogram
+
+## Distribution of the Continuous variables
+
+ggplot(usa_housing_train, aes(price)) + 
+  geom_histogram(color = "black", fill="light blue") +
+  labs(title = "Distribution of the rent price in the USA Housing Data",
+       x="price", y="count", caption = "USA Housing Data: Kaggle") +
+  theme_bw()
+
+## the data is very skewed
+
+## checking the distribution of price with log10 transformation
+
+ggplot(usa_housing_train, aes(price)) + 
+  geom_histogram(color = "black", fill="light blue") +
+  labs(title = "Distribution of the rent price in the USA Housing Data",
+       x="price", y="count", caption = "USA Housing Data: Kaggle") +
+  theme_bw() + scale_x_log10()
+
+
+## this distribution is less skewed compared to previous
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+ggplot(usa_housing_train, aes(sqfeet)) + 
+  geom_histogram(color = "black", fill="light blue") +
+  labs(title = "Distribution of the sqfeet in the USA Housing Data",
+       x="sqfeet", y="count", caption = "USA Housing Data: Kaggle") +
+  theme_bw()
+
+## the data is very skewed
+
+## checking the distribution of price with log10 transformation
+
+ggplot(usa_housing_train, aes(sqfeet)) + 
+  geom_histogram(color = "black", fill="light blue") +
+  labs(title = "Distribution of the sqfeet in the USA Housing Data",
+       x="sqfeet", y="count", caption = "USA Housing Data: Kaggle") +
+  theme_bw() + scale_x_log10()
+
+
+## this distribution is less skewed compared to previous
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+## thus converting the price to log 10, as it will prevent the skeweness
+## and log 10 preserves the order, thus can built better model and
+## evaluate the house prices for all types of house with different prices
+
+
+usa_housing_train <- usa_housing_train %>% 
+  mutate(price_log10 = log10(price),
+         sqfeet_log10 = log10(sqfeet)) %>%
+  select(-price, -sqfeet)
+
+
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+```
+
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+## Bivariate analysis and correlation
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+
+```{r}
+ggplot(usa_housing_train, aes(sqfeet_log10, price_log10)) + geom_point(shape=21, alpha=0.3) +
+  geom_smooth(method="lm", formula="y~x") +
+  labs(x="sqfeet", y= "price", title="Relation between Price and Sqfeet",
+       caption = "USA Housing Data: kaggle") +
+  theme_bw() 
+
+## this shows apositive linear relation relation between price and 
+## sqfeet further evaluating with correlation coefficients
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+ggplot(usa_housing_train, aes(type, price_log10)) + geom_boxplot() +
+  labs(x="type", y= "price", title="Relation between Price and type",
+       caption = "USA Housing Data: Kaggle") +
+  theme_bw() 
+
+
+
+
+ggplot(data = usa_housing_train, mapping = aes(x = price_log10)) + 
+  geom_freqpoly(mapping = aes(colour = type)) 
+
+
+## price is differnt for differnt types of housings
+## but majority fall within log10 price of 2.5 to 3.5
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+ggplot(usa_housing_train, aes(factor(beds), price_log10)) + geom_boxplot() +
+  labs(x="beds", y= "price", title="Relation between Price and beds",
+       caption = "USA Housing Data: Kaggle") +
+  theme_bw() 
+
+
+## as the number of the beds increases the median
+## of the log 10 house price increases
+## which indicates a positive relation
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+ggplot(usa_housing_train, aes(factor(baths), price_log10)) + geom_boxplot() +
+  labs(x="baths", y= "price", title="Relation between Price and number of baths",
+       caption = "USA Housing Data: Kaggle") +
+  theme_bw() 
+
+
+## price increase for number of bath grater than 2
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ggplot(usa_housing_train, aes(factor(dogs_allowed), price_log10)) + geom_boxplot() +
+  labs(x="dogs allowed", y= "price", title="Relation between Price and dogs allowed",
+       caption = "USA Housing Data: Kaggle") +
+  theme_bw() 
+
+
+## price is almost same for both the condition
+## no relation
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+ggplot(usa_housing_train, aes(parking_options, price_log10, fill=parking_options)) + geom_boxplot() +
+  labs(x="parking options", y= "price", title="Relation between Price and parking options",
+       caption = "USA Housing Data: Kaggle") +
+  theme_bw() 
+
+
+## median log 10 house price is higher for valet parking
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+ggplot(usa_housing_train, aes(laundry_options, price_log10, fill=laundry_options)) + geom_boxplot() +
+  labs(x="laundry options", y= "price", title="Relation between Price and parking options",
+       caption = "USA Housing Data: Kaggle") +
+  theme_bw() 
+
+
+## the housing with in unit laundry options have higher price
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+## correlations between the numeric variables
+
+corrplot(cor(usa_housing_train[,c(2:9,12,13)]),
+         method = "ellipse",
+         bg="light blue",
+         type="upper",
+         title="
+           
+           
+           Correlation for the variables in USA hosing dataset
+           ",
+         diag=F,
+         outline=T, insig="pch",
+         pch = 3)
+
+```
+
+```{r}
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# splitting the data into train and validation set
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+## checking the duplicates before splitting the data
+
+check_duplct <- duplicated(usa_housing_train)
+
+sum(check_duplct)
+
+## as imputations and preprocessing can create duplicates
+## removing these duplicate values before splitting the data
+## into train and validation
+
+usa_housing_train <- distinct(usa_housing_train)
+
+
+## splitting the data with intial spit function from rsample
+
+set.seed(123)
+
+sample_i <- initial_split(usa_housing_train, prop = 0.8, strata = "price_log10")
+
+## creating sample set 
+
+usa_housing_tr <- training(sample_i)
+
+
+## creating validation set
+
+usa_housing_vald <- testing(sample_i)
+
+
+## checking the distribution of price in both the sets
+
+summary(usa_housing_tr$price)
+
+summary(usa_housing_vald$price)
+
+## its hows same distribution except slight difference in max
+
+
+##~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+## Feature Selection
+##~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+## checking variables with near zero variance
+## as variables with same value will not provide any
+## information
+
+## checking variables with zero variance and near zero variance with
+## near zero var function from caret package
+
+check_zero_var <- nearZeroVar(usa_housing_tr, names = T)
+
+
+check_zero_var
+
+
+
+## thus removing these features as these have same observations and no variability
+
+usa_housing_tr <- usa_housing_tr %>% select (-check_zero_var)
+
+
+usa_housing_vald <- usa_housing_vald %>% select (-check_zero_var)
+
+```
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+## checking the clean data before building the model
+
+```{r}
+colSums(is.na(usa_housing_tr))
+
+pairs.panels(cor(usa_housing_tr[,c(2:8,11,12)]))
+
+```
+
+##~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+```{r}
+
+## metric to evaluate the performance of the regression models
+
+## function to calculate performance metrics for regression model
+
+
+model_performance <- function(test, pred) {
+  
+  model_rmse <- sqrt(mean((test-pred)^2))
+  
+  model_mse <- mean((test-pred)^2)
+  
+  model_mae <- mean(abs(test-pred))
+  
+  correlation <- cor(test, pred)
+  
+  return(data.frame(model_rmse, model_mse, model_mae, correlation))
+}
+
+
+
+```
+
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+## **CRISP-DM: Modelling**
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+
+##~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+## Model 1
+
+## Building the Multiple Linear Regression model
+
+##~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+## Multiple Linear Regrssion model
+
+```{r}
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+## fitting a linear regression model
+usa_housing_lm1 <- lm(price_log10 ~. , data=usa_housing_tr)
+
+## checking the summary
+summary(usa_housing_lm1)  ## 25% R square
+
+
+##~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+## predicting the test data with this model
+
+usa_housing_lm_tstpred <- predict(usa_housing_lm1, usa_housing_vald)
+
+
+## checking rmse on test data
+
+check_tst_lm <- model_performance(usa_housing_vald$price_log10, usa_housing_lm_tstpred)
+
+print(check_tst_lm)
+
+
+
+## it shows moderate correlation i.e 52% and rMSE of 0.16
+
+plot(usa_housing_vald$price_log10, usa_housing_lm_tstpred, abline(a=0, b=1))
+## this shows model is underfitting
+
+## to understand the performance of the model
+## check model performance on train data
+
+usa_housing_lm_trpred <- predict(usa_housing_lm1, usa_housing_tr)
+
+
+check_tr <- model_performance(usa_housing_tr$price_log10, usa_housing_lm_trpred)
+
+check_tr
+
+
+
+
+## the correlation on train data is 50% and rmse is 0.169
+
+## the performance on the test set is better
+## the error on test data is less as compared to train
+## however, both data is showing moderate correlation
+
+## using caret to get the final model
+## based on metrics with k fold cross validation
+
+set.seed(123)
+
+usa_housing_crlm1 <- train(
+  price_log10 ~ .,
+  data=usa_housing_tr,
+  method = "lm",
+  trControl = trainControl(method="cv", number=10)
+)
+
+usa_housing_crlm1
+
+
+## predicting the test data with this model
+
+usa_housing_lm_crpred <- predict(usa_housing_crlm1, usa_housing_vald)
+
+
+## checking rmse on test data
+
+check_tst_lm <- model_performance(usa_housing_vald$price_log10, usa_housing_lm_crpred)
+
+print(check_tst_lm)
+
+## it shows the same result as all the variables are used
+## the moderate performance could due to:
+## as the data is very complex and non linear
+
+## getting the values of the alpha and lamda with
+## k fold cross validation to get tuned model
+
+
+## creating data matrix of the predictor variables, for glmnet method
+
+usa_train_predvar <- data.matrix(select(usa_housing_tr, -c("price_log10")))
+usa_train_resvar <- usa_housing_tr$price_log10
+
+usa_test_predvar <- data.matrix(select(usa_housing_vald, -c("price_log10")))
+usa_test_resvar <- usa_housing_vald$price_log10
+
+
+## using caret with 5 fold cross validation to get the final
+## model using glmnet method for balnce between alpha and lamda, as the above model 
+## was having low R square 
+## also preprocessing involves only center and scale as predictors are not
+## normalized and near zero variance variables are removed
+
+set.seed(123)
+
+usa_housing_glmnet <- train(
+  x=usa_train_predvar,
+  y=usa_train_resvar,
+  method = "glmnet",
+  preProcess = c("center", "scale"),
+  trControl = trainControl(method="cv", number=5)
+)
+
+
+## checking the alpha and lambda(tuning parameters) in the model
+## with low RMSE
+
+usa_housing_glmnet$bestTune
+
+## checking RMSE of the best tuned model
+
+usa_housing_glmnet$results %>%
+  filter(alpha==usa_housing_glmnet$bestTune$alpha, lambda==usa_housing_glmnet$bestTune$lambda)
+
+
+## predicting test and train model RMSE
+usa_housing_final_pred <- predict(usa_housing_glmnet, usa_test_predvar)
+
+model_performance(usa_housing_final_pred, usa_test_resvar)
+
+## plotting the important variables with varImp function
+plot(varImp(usa_housing_glmnet, num_features =10, geom="point"))
+
+
+
+vip(usa_housing_glmnet, num_features =10, geom="point")
+
+## as the performance of this model is not bette
+
+## hence considering the model with all the variables 
+## withb lm is final
+
+## the performance of the model could have been improved by
+## adding the features in the model
+## as the error is high
+## and r square is not good
+## this model required feature engineering 
+## to improve the performance
+
+## the final model is model generated with all the features with 10
+## fold cross valiadtion 
+## plotting final model
+
+plot(varImp(usa_housing_crlm1))
+
+
+```
+
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+## Model 2
+
+## Regression Tree Model
+
+##~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+```{r}
+
+## building regression tree model on train data
+## using rpart function from rpart package
+
+usa_housing_regtree <- rpart(
+  formula = price_log10 ~ .,
+  data= usa_housing_tr,
+  method = "anova"
+)
+
+
+## checking the tree
+usa_housing_regtree
+
+rpart.plot(usa_housing_regtree)
+
+
+## this shows for instance : if there is laundry option within unit
+## sqfeet log 10 is <3 i.e sqfeet less than 3000sq feet 
+## and type of the housing is house
+## than price log 10 will be 2.9 in 3% of the cases
+## i.e rent price will be 10 ^ 2.9 i.e $794
+
+plotcp(usa_housing_regtree)
+
+## this shows that the model with 4 and 6 tree with cp 0.01
+## shows low error
+
+
+## checking the performance on the validation data
+
+check_regTree_tst_pred <- predict(usa_housing_regtree, usa_housing_vald)
+
+
+## checking performance on the validation data
+
+test_pref_regtree <- model_performance(usa_housing_vald$price_log10, check_regTree_tst_pred)
+
+
+test_pref_regtree
+## the corretion is moderate,
+
+
+summary(check_regTree_tst_pred)
+
+summary(usa_housing_vald$price_log10)
+
+## the summary distribution of the orediction and outcome
+## variables hows that the model is not able to predict
+## the maximum price, which could be
+## due to most of the data is grouped at the around lower price
+## values or more specifically unbalanced or skewed data
+
+
+
+## checking the performance on the train data
+
+check_regTree_tr_pred <- predict(usa_housing_regtree, usa_housing_tr)
+
+
+## checking performance on the train data
+
+tr_pref_regtree <- model_performance(usa_housing_tr$price_log10, check_regTree_tr_pred)
+
+
+tr_pref_regtree
+
+## the performance is almost same on train and test data
+
+
+## using 10 fold cross validation to get the model with caret
+
+check_caret_regtree <- train(
+  price_log10~.,
+  data= usa_housing_tr,
+  method="rpart",
+  trControl = trainControl(method = "cv", number = 10),
+  tuneLength = 20
+)
+
+## checking the tree
+check_caret_regtree
+
+ggplot(check_caret_regtree)
+
+## this shows RMSE is lower with cp around 0.01
+
+## checking the performance on test data
+check_valid <- predict(check_caret_regtree, usa_housing_vald)
+
+test_perf_cregtree <- model_performance(usa_housing_vald$price_log10, check_valid)
+
+test_perf_cregtree
+
+## this shows 49% correlation and error 0.16
+## the performance improved compared 
+3# to the previous
+
+## checking performance on the train data
+
+check_train <- predict(check_caret_regtree, usa_housing_tr)
+
+tr_perf_cregtree <- model_performance(usa_housing_tr$price_log10, check_train)
+
+tr_perf_cregtree
+
+## as the correlation is better on test data compared to train data
+## which shows model is generalised and better compared to the previous
+
+
+## plotting the features
+plot(varImp(check_caret_regtree))
+
+
+
+## this plot shows the important features of split for tree model
+
+
+```
+
+
+
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+## Model 3: Random forest model
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+```{r}
+## creating random forest model
+
+## creating the random forest model using
+## ranger function from ranger package
+
+usa_housing_rf <- ranger(price_log10~., data = usa_housing_tr, num.trees = 500,
+                         respect.unordered.factors = "order")
+
+
+## checking the model
+usa_housing_rf
+
+
+## checking the performance on the test data
+test_rf_pred <- predict(usa_housing_rf, usa_housing_vald)
+
+test_rg_perf <- model_performance(usa_housing_vald$price_log10, test_rf_pred$predictions)
+
+test_rg_perf
+
+## the rmse is less as compared to linear regresion and regression tree
+## model and correlation is high i.e 62% 
+
+
+## checking the performance on the train data
+tr_rf_pred <- predict(usa_housing_rf, usa_housing_tr)
+
+tr_rg_perf <- model_performance(usa_housing_tr$price_log10, tr_rf_pred$predictions)
+
+tr_rg_perf
+
+
+
+## as the error on test set is high compared to train set
+## model is showing high variance and is overfitting
+
+
+## regularizing the model to decrease variance
+## by reducing the complexity of the model
+## by increasing node size and checking differnt number
+## of random split of the variables
+
+## setting the grid to include in the tunegris in train function with caret
+
+set_grid <- expand.grid(.mtry=c(4,6,8),
+                        .splitrule="variance",
+                        .min.node.size=c(5,10))
+
+
+## train function with the set grid and 10 fold cross validation
+
+usa_housing_crt_rf <- train(
+  price_log10 ~.,
+  data=usa_housing_tr,
+  metric="RMSE",
+  method="ranger",
+  trControl = trainControl(method = "cv", number = 10),
+  tuneGrid = set_grid
+)
+
+## checking the model 
+usa_housing_crt_rf
+
+## checking the performance on the test data
+
+test_crtrf_pred <- predict(usa_housing_crt_rf, usa_housing_vald)
+
+test_rg_perf <- model_performance(usa_housing_vald$price_log10, test_crtrf_pred)
+
+test_rg_perf
+
+## the performance on the test data has improved compared to the previous
+## model
+
+```
+
+
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+## **CRISP-DM: Evaluation**
+
+## comparing models
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+```{r}
+
+## comparing the performance of the model
+
+
+## models performance
+
+
+reg_model_preformance <- data.frame(models = c("LM", "Regression Tree", "RandomForest"), MSE = c(check_tst_lm$model_mse, test_perf_cregtree$model_mse,
+                                                                          test_rg_perf$model_mse), RMSE = c(check_tst_lm$model_rmse, test_perf_cregtree$model_rmse,test_rg_perf$model_rmse), 
+                                    MAE= c(check_tst_lm$model_mae, test_perf_cregtree$model_mae,test_rg_perf$model_mae), Corr = c(check_tst_lm$correlation, test_perf_cregtree$correlation,test_rg_perf$correlation))
+                                                                      
+
+reg_model_preformance
+
+## this shows that the performance of the random forest model was better
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+## checking the random forest model on the test data split at the very
+## beginning to get the model performance
+
+## processing test data, to remove NA's and log transform price and sqfeet
+
+anyNA(usa_housing_test)
+
+colSums(is.na(usa_housing_test))
+
+## creating the category as did in the original data
+usa_housing_test$laundry_options[is.na(usa_housing_test$laundry_options)] <- "unknown"
+
+
+usa_housing_test$parking_options[is.na(usa_housing_test$parking_options)] <- "unknown"
+
+## checking outlier
+usa_housing_outliert <- usa_housing_test[,c(1,3:5)]
+
+usa_housing_outliert <- as.data.frame(lapply(usa_housing_outliert, function(usa_housing_outliert)
+  abs((mean(usa_housing_outliert, na.rm=T)- usa_housing_outliert)/sd(usa_housing_outliert, na.rm=T))))
+
+
+usa_housing_test <- usa_housing_test[!rowSums(usa_housing_outliert>3),]
+
+
+## removing 0 before log tranformation
+
+usa_housing_test$price[usa_housing_test$price == 0] <- median(usa_housing_test$price, na.rm = T)
+
+usa_housing_test$sqfeet[usa_housing_test$sqfeet == 0] <- median(usa_housing_test$sqfeet, na.rm = T)
+
+
+
+## log tranforming the price and sqfeet values
+
+usa_housing_test <- usa_housing_test %>% 
+  mutate(price_log10 = log10(price),
+         sqfeet_log10 = log10(sqfeet)) %>%
+  select(-price, -sqfeet)
+
+
+## CRISP-DM: Model Deployment
+
+## predicting the values for the test data using the rf model
+
+final_model_per <- predict(usa_housing_crt_rf, usa_housing_test)
+
+final_model_metr <- model_performance(usa_housing_test$price_log10, final_model_per)
+
+
+final_model_metr
+
+## this shows that the model is performing better 
+## on unseen data
+
+
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+## ensemble model
+
+## as the model built with k fold cross validation
+## for stacking to get the final model
+## taking predictions from k fold cross validation models
+
+## predicting the train data with this cross fold lm model
+
+usa_housing_tr_lm <- predict(usa_housing_crlm1, usa_housing_tr)
+
+## predicting the test data with this cross fold lm model
+
+usa_housing_tst_lm <- predict(usa_housing_crlm1, usa_housing_vald)
+
+
+
+## predicting the train data with this cross fold reg tree model model
+
+usa_housing_tr_regTree <- predict(check_caret_regtree, usa_housing_tr)
+
+## predicting the test data with this cross fold reg tree model model
+
+usa_housing_tst_regTree <- predict(check_caret_regtree, usa_housing_vald)
+
+
+
+## predicting the train data with this cross fold random forest  model
+
+usa_housing_tr_rf<- predict(usa_housing_crt_rf, usa_housing_tr)
+
+
+## predicting the test data with this cross fold random forest  model
+
+usa_housing_tst_rf<- predict(usa_housing_crt_rf, usa_housing_vald)
+
+
+
+
+## combining all predictions to build the ensembl model
+all_pred <- data.frame(usa_housing_tr$price_log10, usa_housing_tr_lm, 
+                       usa_housing_tr_regTree, usa_housing_tr_rf)
+
+
+## combining test predictions to predict using ensemble model
+all_pred_tst <- data.frame(usa_housing_vald$price_log10, usa_housing_tst_lm, 
+                       usa_housing_tst_regTree, usa_housing_tst_rf)
+
+
+
+## using caret train to build ensembl on this base layer using random forest
+
+ensemble_tr <- train(usa_housing_tr.price_log10~., all_pred, method="ranger", trControl = trainControl(method = "cv", number = 5))
+
+
+#
+## emsemble model using base predictions based on three models
+```
+
